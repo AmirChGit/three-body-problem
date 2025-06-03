@@ -3,27 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Three Body Simulation</title>
+  <title>Three Body Problem Simulation</title>
   <style>
-    /* Basic reset and black background */
     body {
       margin: 0;
       overflow: hidden;
       background-color: black;
+      font-family: monospace;
     }
 
-    /* Canvas takes full screen */
     canvas {
       display: block;
     }
 
-    /* Toolbar at the top center */
     #controls {
       position: absolute;
       top: 10px;
       left: 50%;
       transform: translateX(-50%);
-      display: flex; 
+      display: flex;
       gap: 10px;
       opacity: 0;
       transition: opacity 0.5s;
@@ -31,19 +29,17 @@
       pointer-events: none;
     }
 
-    /* Show controls only when hovering over body */
     body:hover #controls {
       opacity: 1;
       pointer-events: all;
     }
 
-    /* Shared style for both buttons and color pickers */
     .colorPicker, #resetBtn {
-      width: 28px;
-      height: 28px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       border: 3px solid white;
-      padding: 3px;
+      padding: 4px;
       background: black;
       box-sizing: border-box;
       appearance: none;
@@ -57,7 +53,6 @@
       border: none;
       border-radius: 50%;
     }
-    /* Special styling for the Reset button */
     #resetBtn {
       width: auto;
       height: auto;
@@ -66,10 +61,20 @@
       font-weight: bold;
       color: white;
     }
+
+    #stats {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-size: 14px;
+      white-space: pre-line;
+      z-index: 2;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
-  <!-- Controls container with 3 color pickers and a reset button -->
   <div id="controls">
     <input type="color" class="colorPicker" id="color0" value="#ff0000" />
     <input type="color" class="colorPicker" id="color1" value="#00ffff" />
@@ -77,35 +82,34 @@
     <button id="resetBtn">Reset</button>
   </div>
 
-  <!-- Fullscreen simulation canvas -->
+  <div id="stats"></div>
   <canvas id="canvas"></canvas>
 
   <script>
-    // === Initialize canvas ===
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // === Simple 2D Vector operations ===
+    const statsDiv = document.getElementById("stats");
+
+    let totalSimulations = Number(localStorage.getItem("simCount")) || 0;
+    let maxSimTime = Number(localStorage.getItem("maxSimTime")) || 0;
+    let currentStartTime = Date.now();
+
+    let sketch;
+
     const Vec2 = {
       from: (x, y) => (typeof x === "object" ? x : { x, y: y ?? x }),
       fromPolar: (r, a) => ({ x: Math.cos(a) * r, y: Math.sin(a) * r }),
       zero: () => ({ x: 0, y: 0 }),
-      add: (a, b) => {
-        const bv = Vec2.from(b);
-        return { x: a.x + bv.x, y: a.y + bv.y };
-      },
-      mult: (v, b) => {
-        const bv = Vec2.from(b);
-        return { x: v.x * bv.x, y: v.y * bv.y };
-      },
+      add: (a, b) => { const bv = Vec2.from(b); return { x: a.x + bv.x, y: a.y + bv.y }; },
+      mult: (v, b) => { const bv = Vec2.from(b); return { x: v.x * bv.x, y: v.y * bv.y }; },
       diff: (a, b) => ({ x: a.x - b.x, y: a.y - b.y }),
       length: (v) => Math.sqrt(v.x ** 2 + v.y ** 2),
       random: () => ({ x: Math.random(), y: Math.random() })
     };
 
-    // === Each moving star ===
     class PointMass {
       constructor(position, mass, color, speed = Vec2.zero()) {
         this.position = position;
@@ -114,15 +118,11 @@
         this.speed = speed;
         this.dead = false;
         this.prevPos = [];
-        this.prevPosAmount = 40; // fading trail length
+        this.prevPosAmount = 60;
       }
-
-      // Apply a force vector to the star
       applyForce(force) {
         this.speed = Vec2.add(this.speed, force);
       }
-
-      // Update star position and save past positions for trail
       update() {
         if (this.prevPos.length > this.prevPosAmount) this.prevPos.pop();
         if (!this.dead) {
@@ -130,10 +130,7 @@
           this.position = Vec2.add(this.position, this.speed);
         }
       }
-
-      // Draw the trail and star with glow effects
       draw(ctx, zoom) {
-        // Trail
         ctx.strokeStyle = this.color;
         ctx.lineWidth = 1 / zoom;
         ctx.globalAlpha = 0.2;
@@ -149,14 +146,9 @@
         ctx.globalAlpha = 1;
         const r = Math.max(Math.sqrt(this.mass) * 1.0, 2 / zoom);
 
-        // Outer glow (radial gradient)
         const gradient = ctx.createRadialGradient(
-          this.position.x,
-          this.position.y,
-          0,
-          this.position.x,
-          this.position.y,
-          r * 2
+          this.position.x, this.position.y, 0,
+          this.position.x, this.position.y, r * 2
         );
         gradient.addColorStop(0, this.color);
         gradient.addColorStop(0.2, this.color);
@@ -167,7 +159,6 @@
         ctx.arc(this.position.x, this.position.y, r * 2.5, 0, 2 * Math.PI);
         ctx.fill();
 
-        // Core star
         ctx.fillStyle = this.color;
         ctx.beginPath();
         ctx.arc(this.position.x, this.position.y, r, 0, 2 * Math.PI);
@@ -175,7 +166,6 @@
       }
     }
 
-    // Compute bounding box around all live stars
     function computeBoundingBox(vectors) {
       const xs = vectors.map((v) => v.x);
       const ys = vectors.map((v) => v.y);
@@ -186,17 +176,12 @@
       return { left, right, top, bottom, width: right - left, height: bottom - top };
     }
 
-    let sketch;
-
-    // === Main simulation logic ===
     class Sketch {
       constructor(width, height) {
         this.width = width;
         this.height = height;
-        this.camera = { position: Vec2.zero(), zoom: 0.875 }; // 75% zoom in
-        this.colors = ["#ff0000", "#00ffff", "#ffffff"]; // red, cyan, white
-
-        // Initialize 3 stars with random positions & velocities
+        this.camera = { position: Vec2.zero(), zoom: 0.875 };
+        this.colors = ["#ff0000", "#00ffff", "#ffffff"];
         this.points = Array.from({ length: 3 }).map((_, i) => new PointMass(
           Vec2.mult(Vec2.add(Vec2.random(), -0.5), Vec2.from(width, height)),
           Math.random() * 40 + 20,
@@ -205,10 +190,8 @@
         ));
       }
 
-      // Update physics & camera
       update() {
         const alive = this.points.filter((p) => !p.dead);
-
         for (let i = 0; i < alive.length - 1; i++) {
           for (let j = i + 1; j < alive.length; j++) {
             const a = alive[i], b = alive[j];
@@ -227,16 +210,21 @@
         const box = computeBoundingBox(alive.map((p) => p.position));
         const limit = Math.min(this.width, this.height) * 1.6;
         if (box.width > limit || box.height > limit) {
-          init(); // reset simulation
-          return;
+          const now = Date.now();
+          const runtime = (now - currentStartTime) / 1000;
+          totalSimulations++;
+          if (runtime > maxSimTime) maxSimTime = runtime;
+          localStorage.setItem("simCount", totalSimulations);
+          localStorage.setItem("maxSimTime", maxSimTime);
+          currentStartTime = now;
+          init();
         }
 
         const camPos = Vec2.from((box.left + box.right) / 2, (box.top + box.bottom) / 2);
-        const ease = 0.995; // camera smoothing
+        const ease = 0.995;
         this.camera.position = Vec2.add(Vec2.mult(this.camera.position, ease), Vec2.mult(camPos, 1 - ease));
       }
 
-      // Draw everything
       draw(canvas) {
         ctx.clearRect(0, 0, this.width, this.height);
         ctx.fillStyle = "black";
@@ -247,7 +235,6 @@
         ctx.scale(this.camera.zoom, this.camera.zoom);
         ctx.translate(-this.camera.position.x, -this.camera.position.y);
 
-        // Draw all 3 stars with selected colors
         this.points.forEach((p, i) => {
           p.color = document.getElementById(`color${i}`).value;
           p.draw(ctx, this.camera.zoom);
@@ -257,22 +244,25 @@
       }
     }
 
-    // === Animation loop ===
     function animate() {
       sketch.update();
       sketch.draw(canvas);
+      updateStats();
       requestAnimationFrame(animate);
     }
 
-    // === Initialize simulation ===
-    function init() {
-      sketch = new Sketch(canvas.width, canvas.height);
+    function updateStats() {
+      const elapsed = ((Date.now() - currentStartTime) / 1000).toFixed(1);
+      statsDiv.textContent = `Current Runtime: ${elapsed}s\nLongest Runtime: ${maxSimTime.toFixed(1)}s\nTotal Simulations: ${totalSimulations}`;
     }
 
-    // Reset on button click
+    function init() {
+      sketch = new Sketch(canvas.width, canvas.height);
+      currentStartTime = Date.now();
+    }
+
     document.getElementById("resetBtn").addEventListener("click", init);
 
-    // Start simulation
     init();
     animate();
   </script>
