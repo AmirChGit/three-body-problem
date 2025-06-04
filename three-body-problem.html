@@ -16,9 +16,10 @@
       display: block;
     }
 
+    /* Controls now at bottom center */
     #controls {
       position: absolute;
-      top: 10px;
+      bottom: 10px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
@@ -45,14 +46,17 @@
       appearance: none;
       cursor: pointer;
     }
+
     .colorPicker::-webkit-color-swatch-wrapper {
       padding: 0;
       border-radius: 50%;
     }
+
     .colorPicker::-webkit-color-swatch {
       border: none;
       border-radius: 50%;
     }
+
     #resetBtn {
       width: auto;
       height: auto;
@@ -75,14 +79,17 @@
   </style>
 </head>
 <body>
+  <!-- Stats Top-Left -->
+  <div id="stats"></div>
+
+  <!-- Controls Bottom-Center -->
   <div id="controls">
-    <input type="color" class="colorPicker" id="color0" value="#ff0000" />
+    <input type="color" class="colorPicker" id="color0" value="#ffc72e" />
     <input type="color" class="colorPicker" id="color1" value="#00ffff" />
     <input type="color" class="colorPicker" id="color2" value="#ffffff" />
     <button id="resetBtn">Reset</button>
   </div>
 
-  <div id="stats"></div>
   <canvas id="canvas"></canvas>
 
   <script>
@@ -181,7 +188,7 @@
         this.width = width;
         this.height = height;
         this.camera = { position: Vec2.zero(), zoom: 0.875 };
-        this.colors = ["#ff0000", "#00ffff", "#ffffff"];
+        this.colors = ["#ffc72e", "#00ffff", "#ffffff"];
         this.points = Array.from({ length: 3 }).map((_, i) => new PointMass(
           Vec2.mult(Vec2.add(Vec2.random(), -0.5), Vec2.from(width, height)),
           Math.random() * 40 + 20,
@@ -217,7 +224,7 @@
           localStorage.setItem("simCount", totalSimulations);
           localStorage.setItem("maxSimTime", maxSimTime);
           currentStartTime = now;
-          init();
+          init(); // auto-reset (already counted)
         }
 
         const camPos = Vec2.from((box.left + box.right) / 2, (box.top + box.bottom) / 2);
@@ -261,7 +268,11 @@
       currentStartTime = Date.now();
     }
 
-    document.getElementById("resetBtn").addEventListener("click", init);
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      totalSimulations++;
+      localStorage.setItem("simCount", totalSimulations);
+      init();
+    });
 
     init();
     animate();
