@@ -1,281 +1,380 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Three Body Problem Simulation</title>
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background-color: black;
-      font-family: monospace;
-    }
+    <meta charset="UTF-8" />
+    <!-- Ensure proper scaling on mobile devices -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Three Body Problem Simulation</title>
+    <style>
+        /* Reset default margin and hide overflow to prevent scrolling */
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: black;
+            font-family: monospace;
+        }
 
-    canvas {
-      display: block;
-    }
+        /* Ensure canvas takes full width/height */
+        canvas {
+            display: block;
+        }
 
-    /* Controls now at bottom center */
-    #controls {
-      position: absolute;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 10px;
-      opacity: 0;
-      transition: opacity 0.5s;
-      z-index: 1;
-      pointer-events: none;
-    }
+        /* Controls container styling */
+        #controls {
+            /* Position at bottom center of screen */
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%); /* Center horizontally */
+            
+            /* Layout controls with spacing */
+            display: flex;
+            gap: 10px;
+            
+            /* Initially hidden, fade in on hover */
+            opacity: 0;
+            transition: opacity 0.5s;
+            z-index: 1;
+            pointer-events: none; /* Allow clicking through when hidden */
+        }
 
-    body:hover #controls {
-      opacity: 1;
-      pointer-events: all;
-    }
+        /* Show controls when hovering over the body */
+        body:hover #controls {
+            opacity: 1;
+            pointer-events: all; /* Re-enable interaction */
+        }
 
-    .colorPicker, #resetBtn {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: 3px solid white;
-      padding: 4px;
-      background: black;
-      box-sizing: border-box;
-      appearance: none;
-      cursor: pointer;
-    }
+        /* Styling for color pickers and reset button */
+        .colorPicker, #resetBtn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 3px solid white;
+            padding: 4px;
+            background: black;
+            box-sizing: border-box;
+            appearance: none;
+            cursor: pointer;
+        }
 
-    .colorPicker::-webkit-color-swatch-wrapper {
-      padding: 0;
-      border-radius: 50%;
-    }
+        /* Remove default color picker styling */
+        .colorPicker::-webkit-color-swatch-wrapper {
+            padding: 0;
+            border-radius: 50%;
+        }
 
-    .colorPicker::-webkit-color-swatch {
-      border: none;
-      border-radius: 50%;
-    }
+        .colorPicker::-webkit-color-swatch {
+            border: none;
+            border-radius: 50%;
+        }
 
-    #resetBtn {
-      width: auto;
-      height: auto;
-      border-radius: 10px;
-      padding: 8px 12px;
-      font-weight: bold;
-      color: white;
-    }
+        /* Reset button specific styling */
+        #resetBtn {
+            width: auto;
+            height: auto;
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-weight: bold;
+            color: white;
+        }
 
-    #stats {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      color: white;
-      font-size: 14px;
-      white-space: pre-line;
-      z-index: 2;
-      pointer-events: none;
-    }
-  </style>
+        /* Stats display styling */
+        #stats {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 14px;
+            white-space: pre-line; /* Preserve line breaks */
+            z-index: 2;
+            pointer-events: none; /* Don't interfere with interaction */
+        }
+    </style>
 </head>
 <body>
-  <!-- Stats Top-Left -->
-  <div id="stats"></div>
+    <!-- Statistics display -->
+    <div id="stats"></div>
 
-  <!-- Controls Bottom-Center -->
-  <div id="controls">
-    <input type="color" class="colorPicker" id="color0" value="#ffc72e" />
-    <input type="color" class="colorPicker" id="color1" value="#00ffff" />
-    <input type="color" class="colorPicker" id="color2" value="#ffffff" />
-    <button id="resetBtn">Reset</button>
-  </div>
+    <!-- Control panel -->
+    <div id="controls">
+        <!-- Color pickers for each body -->
+        <input type="color" class="colorPicker" id="color0" value="#ffc72e" />
+        <input type="color" class="colorPicker" id="color1" value="#00ffff" />
+        <input type="color" class="colorPicker" id="color2" value="#ffffff" />
+        <button id="resetBtn">Reset</button>
+    </div>
 
-  <canvas id="canvas"></canvas>
+    <!-- Main canvas for simulation -->
+    <canvas id="canvas"></canvas>
 
-  <script>
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    <script>
+        /**
+         * Initialize canvas and context
+         */
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
 
-    const statsDiv = document.getElementById("stats");
+        const statsDiv = document.getElementById("stats");
 
-    let totalSimulations = Number(localStorage.getItem("simCount")) || 0;
-    let maxSimTime = Number(localStorage.getItem("maxSimTime")) || 0;
-    let currentStartTime = Date.now();
+        /**
+         * Load or initialize statistics
+         * Uses localStorage to persist across sessions
+         */
+        let totalSimulations = Number(localStorage.getItem("simCount")) || 0;
+        let maxSimTime = Number(localStorage.getItem("maxSimTime")) || 0;
+        let currentStartTime = Date.now();
 
-    let sketch;
+        let sketch; // Main simulation instance
 
-    const Vec2 = {
-      from: (x, y) => (typeof x === "object" ? x : { x, y: y ?? x }),
-      fromPolar: (r, a) => ({ x: Math.cos(a) * r, y: Math.sin(a) * r }),
-      zero: () => ({ x: 0, y: 0 }),
-      add: (a, b) => { const bv = Vec2.from(b); return { x: a.x + bv.x, y: a.y + bv.y }; },
-      mult: (v, b) => { const bv = Vec2.from(b); return { x: v.x * bv.x, y: v.y * bv.y }; },
-      diff: (a, b) => ({ x: a.x - b.x, y: a.y - b.y }),
-      length: (v) => Math.sqrt(v.x ** 2 + v.y ** 2),
-      random: () => ({ x: Math.random(), y: Math.random() })
-    };
+        /**
+         * Vector operations utility object
+         * Provides methods for 2D vector mathematics
+         */
+        const Vec2 = {
+            // Create vector from coordinates or object
+            from: (x, y) => (typeof x === "object" ? x : { x, y: y ?? x }),
+            
+            // Create vector from polar coordinates (radius and angle)
+            fromPolar: (r, a) => ({ x: Math.cos(a) * r, y: Math.sin(a) * r }),
+            
+            // Create zero vector
+            zero: () => ({ x: 0, y: 0 }),
+            
+            // Add two vectors
+            add: (a, b) => { const bv = Vec2.from(b); return { x: a.x + bv.x, y: a.y + bv.y }; },
+            
+            // Multiply vector components
+            mult: (v, b) => { const bv = Vec2.from(b); return { x: v.x * bv.x, y: v.y * bv.y }; },
+            
+            // Calculate difference between vectors
+            diff: (a, b) => ({ x: a.x - b.x, y: a.y - b.y }),
+            
+            // Calculate vector length
+            length: (v) => Math.sqrt(v.x ** 2 + v.y ** 2),
+            
+            // Create random vector
+            random: () => ({ x: Math.random(), y: Math.random() })
+        };
 
-    class PointMass {
-      constructor(position, mass, color, speed = Vec2.zero()) {
-        this.position = position;
-        this.mass = mass;
-        this.color = color;
-        this.speed = speed;
-        this.dead = false;
-        this.prevPos = [];
-        this.prevPosAmount = 60;
-      }
-      applyForce(force) {
-        this.speed = Vec2.add(this.speed, force);
-      }
-      update() {
-        if (this.prevPos.length > this.prevPosAmount) this.prevPos.pop();
-        if (!this.dead) {
-          this.prevPos.unshift({ ...this.position });
-          this.position = Vec2.add(this.position, this.speed);
-        }
-      }
-      draw(ctx, zoom) {
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 1 / zoom;
-        ctx.globalAlpha = 0.2;
-        ctx.beginPath();
-        for (let i = 0; i < this.prevPos.length - 1; i++) {
-          const a = this.prevPos[i];
-          const b = this.prevPos[i + 1];
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-        }
-        ctx.stroke();
+        /**
+         * Class representing a gravitational body
+         * Handles position, velocity, mass, and visual representation
+         */
+        class PointMass {
+            constructor(position, mass, color, speed = Vec2.zero()) {
+                this.position = position;
+                this.mass = mass;
+                this.color = color;
+                this.speed = speed;
+                this.dead = false;
+                this.prevPos = []; // Trail positions
+                this.prevPosAmount = 60; // Trail length
+            }
 
-        ctx.globalAlpha = 1;
-        const r = Math.max(Math.sqrt(this.mass) * 1.0, 2 / zoom);
+            // Apply force to change velocity
+            applyForce(force) {
+                this.speed = Vec2.add(this.speed, force);
+            }
 
-        const gradient = ctx.createRadialGradient(
-          this.position.x, this.position.y, 0,
-          this.position.x, this.position.y, r * 2
-        );
-        gradient.addColorStop(0, this.color);
-        gradient.addColorStop(0.2, this.color);
-        gradient.addColorStop(1, "transparent");
+            // Update position and trail
+            update() {
+                // Maintain trail length
+                if (this.prevPos.length > this.prevPosAmount) this.prevPos.pop();
+                
+                if (!this.dead) {
+                    // Add current position to trail
+                    this.prevPos.unshift({ ...this.position });
+                    // Update position based on speed
+                    this.position = Vec2.add(this.position, this.speed);
+                }
+            }
 
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(this.position.x, this.position.y, r * 2.5, 0, 2 * Math.PI);
-        ctx.fill();
+            // Render body and trail
+            draw(ctx, zoom) {
+                // Draw trail
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 1 / zoom;
+                ctx.globalAlpha = 0.2;
+                ctx.beginPath();
+                for (let i = 0; i < this.prevPos.length - 1; i++) {
+                    const a = this.prevPos[i];
+                    const b = this.prevPos[i + 1];
+                    ctx.moveTo(a.x, a.y);
+                    ctx.lineTo(b.x, b.y);
+                }
+                ctx.stroke();
 
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.arc(this.position.x, this.position.y, r, 0, 2 * Math.PI);
-        ctx.fill();
-      }
-    }
+                // Draw body
+                ctx.globalAlpha = 1;
+                const r = Math.max(Math.sqrt(this.mass) * 1.0, 2 / zoom);
 
-    function computeBoundingBox(vectors) {
-      const xs = vectors.map((v) => v.x);
-      const ys = vectors.map((v) => v.y);
-      const left = Math.min(...xs);
-      const right = Math.max(...xs);
-      const top = Math.min(...ys);
-      const bottom = Math.max(...ys);
-      return { left, right, top, bottom, width: right - left, height: bottom - top };
-    }
+                // Create glow effect
+                const gradient = ctx.createRadialGradient(
+                    this.position.x, this.position.y, 0,
+                    this.position.x, this.position.y, r * 2
+                );
+                gradient.addColorStop(0, this.color);
+                gradient.addColorStop(0.2, this.color);
+                gradient.addColorStop(1, "transparent");
 
-    class Sketch {
-      constructor(width, height) {
-        this.width = width;
-        this.height = height;
-        this.camera = { position: Vec2.zero(), zoom: 0.875 };
-        this.colors = ["#ffc72e", "#00ffff", "#ffffff"];
-        this.points = Array.from({ length: 3 }).map((_, i) => new PointMass(
-          Vec2.mult(Vec2.add(Vec2.random(), -0.5), Vec2.from(width, height)),
-          Math.random() * 40 + 20,
-          this.colors[i % this.colors.length],
-          Vec2.fromPolar((Math.random() * 1 + 0.1) * 0.25, Math.random() * 2 * Math.PI)
-        ));
-      }
+                // Draw glow
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(this.position.x, this.position.y, r * 2.5, 0, 2 * Math.PI);
+                ctx.fill();
 
-      update() {
-        const alive = this.points.filter((p) => !p.dead);
-        for (let i = 0; i < alive.length - 1; i++) {
-          for (let j = i + 1; j < alive.length; j++) {
-            const a = alive[i], b = alive[j];
-            const diff = Vec2.diff(a.position, b.position);
-            const dist = Math.max(Vec2.length(diff), 10);
-            const norm = Vec2.mult(diff, 1 / dist);
-            const G = 0.4;
-            const force = Math.min((a.mass * b.mass * G) / dist ** 2, 10000) * 0.25;
-            a.applyForce(Vec2.mult(norm, -force));
-            b.applyForce(Vec2.mult(norm, force));
-          }
-        }
-
-        this.points.forEach((p) => p.update());
-
-        const box = computeBoundingBox(alive.map((p) => p.position));
-        const limit = Math.min(this.width, this.height) * 1.6;
-        if (box.width > limit || box.height > limit) {
-          const now = Date.now();
-          const runtime = (now - currentStartTime) / 1000;
-          totalSimulations++;
-          if (runtime > maxSimTime) maxSimTime = runtime;
-          localStorage.setItem("simCount", totalSimulations);
-          localStorage.setItem("maxSimTime", maxSimTime);
-          currentStartTime = now;
-          init(); // auto-reset (already counted)
+                // Draw core
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.position.x, this.position.y, r, 0, 2 * Math.PI);
+                ctx.fill();
+            }
         }
 
-        const camPos = Vec2.from((box.left + box.right) / 2, (box.top + box.bottom) / 2);
-        const ease = 0.995;
-        this.camera.position = Vec2.add(Vec2.mult(this.camera.position, ease), Vec2.mult(camPos, 1 - ease));
-      }
+        /**
+         * Calculate bounding box for a set of vectors
+         * Used for camera positioning and reset detection
+         */
+        function computeBoundingBox(vectors) {
+            const xs = vectors.map((v) => v.x);
+            const ys = vectors.map((v) => v.y);
+            const left = Math.min(...xs);
+            const right = Math.max(...xs);
+            const top = Math.min(...ys);
+            const bottom = Math.max(...ys);
+            return { left, right, top, bottom, width: right - left, height: bottom - top };
+        }
 
-      draw(canvas) {
-        ctx.clearRect(0, 0, this.width, this.height);
-        ctx.fillStyle = "black";
-        ctx.fillRect(0, 0, this.width, this.height);
+        /**
+         * Main simulation class
+         * Handles physics calculations and rendering
+         */
+        class Sketch {
+            constructor(width, height) {
+                this.width = width;
+                this.height = height;
+                this.camera = { position: Vec2.zero(), zoom: 0.875 };
+                this.colors = ["#ffc72e", "#00ffff", "#ffffff"];
+                
+                // Initialize three bodies with random positions and velocities
+                this.points = Array.from({ length: 3 }).map((_, i) => new PointMass(
+                    // Random position within screen bounds
+                    Vec2.mult(Vec2.add(Vec2.random(), -0.5), Vec2.from(width, height)),
+                    // Random mass between 20 and 60
+                    Math.random() * 40 + 20,
+                    // Cycle through colors
+                    this.colors[i % this.colors.length],
+                    // Random initial velocity
+                    Vec2.fromPolar((Math.random() * 1 + 0.1) * 0.25, Math.random() * 2 * Math.PI)
+                ));
+            }
 
-        ctx.save();
-        ctx.translate(this.width / 2, this.height / 2);
-        ctx.scale(this.camera.zoom, this.camera.zoom);
-        ctx.translate(-this.camera.position.x, -this.camera.position.y);
+            // Update physics
+            update() {
+                const alive = this.points.filter((p) => !p.dead);
+                
+                // Calculate gravitational forces between all pairs
+                for (let i = 0; i < alive.length - 1; i++) {
+                    for (let j = i + 1; j < alive.length; j++) {
+                        const a = alive[i], b = alive[j];
+                        const diff = Vec2.diff(a.position, b.position);
+                        // Prevent division by zero with minimum distance
+                        const dist = Math.max(Vec2.length(diff), 10);
+                        const norm = Vec2.mult(diff, 1 / dist);
+                        const G = 0.4; // Gravitational constant
+                        // Calculate force with upper limit to prevent instability
+                        const force = Math.min((a.mass * b.mass * G) / dist ** 2, 10000) * 0.25;
+                        // Apply equal and opposite forces
+                        a.applyForce(Vec2.mult(norm, -force));
+                        b.applyForce(Vec2.mult(norm, force));
+                    }
+                }
 
-        this.points.forEach((p, i) => {
-          p.color = document.getElementById(`color${i}`).value;
-          p.draw(ctx, this.camera.zoom);
+                // Update positions
+                this.points.forEach((p) => p.update());
+
+                // Check if simulation should reset
+                const box = computeBoundingBox(alive.map((p) => p.position));
+                const limit = Math.min(this.width, this.height) * 1.6;
+                if (box.width > limit || box.height > limit) {
+                    // Update statistics before reset
+                    const now = Date.now();
+                    const runtime = (now - currentStartTime) / 1000;
+                    totalSimulations++;
+                    if (runtime > maxSimTime) maxSimTime = runtime;
+                    localStorage.setItem("simCount", totalSimulations);
+                    localStorage.setItem("maxSimTime", maxSimTime);
+                    currentStartTime = now;
+                    init();
+                }
+
+                // Update camera position with smooth tracking
+                const camPos = Vec2.from((box.left + box.right) / 2, (box.top + box.bottom) / 2);
+                const ease = 0.995;
+                this.camera.position = Vec2.add(Vec2.mult(this.camera.position, ease), Vec2.mult(camPos, 1 - ease));
+            }
+
+            // Render frame
+            draw(canvas) {
+                // Clear canvas
+                ctx.clearRect(0, 0, this.width, this.height);
+                ctx.fillStyle = "black";
+                ctx.fillRect(0, 0, this.width, this.height);
+
+                // Apply camera transform
+                ctx.save();
+                ctx.translate(this.width / 2, this.height / 2);
+                ctx.scale(this.camera.zoom, this.camera.zoom);
+                ctx.translate(-this.camera.position.x, -this.camera.position.y);
+
+                // Draw bodies with current colors
+                this.points.forEach((p, i) => {
+                    p.color = document.getElementById(`color${i}`).value;
+                    p.draw(ctx, this.camera.zoom);
+                });
+
+                ctx.restore();
+            }
+        }
+
+        /**
+         * Animation loop
+         */
+        function animate() {
+            sketch.update();
+            sketch.draw(canvas);
+            updateStats();
+            requestAnimationFrame(animate);
+        }
+
+        /**
+         * Update statistics display
+         */
+        function updateStats() {
+            const elapsed = ((Date.now() - currentStartTime) / 1000).toFixed(1);
+            statsDiv.textContent = `Current Runtime: ${elapsed}s\nLongest Runtime: ${maxSimTime.toFixed(1)}s\nTotal Simulations: ${totalSimulations}`;
+        }
+
+        /**
+         * Initialize or reset simulation
+         */
+        function init() {
+            sketch = new Sketch(canvas.width, canvas.height);
+            currentStartTime = Date.now();
+        }
+
+        // Reset button handler
+        document.getElementById("resetBtn").addEventListener("click", () => {
+            totalSimulations++;
+            localStorage.setItem("simCount", totalSimulations);
+            init();
         });
 
-        ctx.restore();
-      }
-    }
-
-    function animate() {
-      sketch.update();
-      sketch.draw(canvas);
-      updateStats();
-      requestAnimationFrame(animate);
-    }
-
-    function updateStats() {
-      const elapsed = ((Date.now() - currentStartTime) / 1000).toFixed(1);
-      statsDiv.textContent = `Current Runtime: ${elapsed}s\nLongest Runtime: ${maxSimTime.toFixed(1)}s\nTotal Simulations: ${totalSimulations}`;
-    }
-
-    function init() {
-      sketch = new Sketch(canvas.width, canvas.height);
-      currentStartTime = Date.now();
-    }
-
-    document.getElementById("resetBtn").addEventListener("click", () => {
-      totalSimulations++;
-      localStorage.setItem("simCount", totalSimulations);
-      init();
-    });
-
-    init();
-    animate();
-  </script>
+        // Start simulation
+        init();
+        animate();
+    </script>
 </body>
 </html>
